@@ -2,16 +2,20 @@
 #load packages
 library(shiny)
 library(bslib)
-#library(maps)
-#library(mapproj)
 library(sf)
 library(tidyverse)
 library(ggplot2)
 library(units)
-#library(plotly)
+library(glue)
+library(RColorBrewer)
 
+#turn off scientific notation
+options(scipen=999)
+
+#get the helper function
 source("helper.R")
 
+#run the helper function (creates the desired data)
 n3_land_use <- helper()
 
 #store a reference dataset
@@ -25,43 +29,40 @@ n3_land_use <- n3_land_use |>
 vars <- setdiff(names(n3_land_use), c("Region", "Basin", "Landuse", "Year"))
 
 #create a simply UI
-ui <- fluidPage(
-  titlePanel("Landuse Types in The Northern Three Region"),
-  sidebarLayout(
-    sidebarPanel(
+ui <- page_sidebar(
+  title = "Landuse Types in The Northern Three Regions",
+  sidebar = sidebar(
       selectInput("region_var", "Region:", choices = unique(n3_land_use$Region)),
       selectInput("basin_var", "Basin:", choices =  NULL),
       selectInput("y_var", "Sub Basin:", choices = vars)
     ),
-    mainPanel(
-      plotOutput("plot")
-    )
-  )
+  plotOutput("plot")
 )
+
 
 #create the server logic
 server <- function(input, output, session) {
   
-  observe({
+  observe({#use observe to return a reactive set of options for the selectInput Button
     
     basins <- n3_land_use |> 
-      filter(Region == input$region_var) |> 
+      filter(Region == input$region_var) |> #based on region, extract only basins within the region
       pull(Basin) |> 
       unique()
     
-    updateSelectInput(session, "basin_var", choices = basins,
+    updateSelectInput(session, "basin_var", choices = basins, #update the "basin_var" input
                       selected = if (length(basins) > 0) basins[1] else NULL)
 
     })
   
-  observe({
+  observe({#use observe to return a reactive set of options for the selectInput Button
     
     sub_basins <- n3_reference |> 
-      filter(Basin == input$basin_var) |> 
+      filter(Basin == input$basin_var) |> #based on basin, extract only sub basins within the basin
       pull(SubBasin) |> 
       unique()
     
-    updateSelectInput(session, "y_var", choices = sub_basins,
+    updateSelectInput(session, "y_var", choices = sub_basins, #update the "y_var" input
                       selected = if (length(sub_basins) > 0) sub_basins[1] else NULL)
     
   })
@@ -91,9 +92,17 @@ server <- function(input, output, session) {
 
     #plot
     ggplot(finalData(), aes(x = Year, y = .data[[input$y_var]], group = Landuse, color = Landuse)) +
-      geom_line() +
+      geom_line(size = 2) +
+      geom_point(size = 5, shape = 21, fill = "white", stroke = 2) +
       scale_y_continuous(trans = "log10") +
-      theme_bw()
+      labs(y = glue("{input$y_var} (km2)")) +
+      theme_bw() +
+      theme(legend.title = element_text(size = 18),
+            legend.text = element_text(size = 12),
+            legend.key.size = unit(2, "line"),
+            axis.title = element_text(size = 16),
+            axis.text = element_text(size = 12)) +
+      scale_color_brewer(palette = "Dark2")
   })
 }
 
